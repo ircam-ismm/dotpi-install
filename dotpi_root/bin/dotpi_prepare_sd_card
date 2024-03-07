@@ -311,31 +311,30 @@ fi
 ######## SD card
 
 bootfs_name="bootfs"
+username=$(whoami) #needed for bootfs path under linux
 
-if [[ "$(uname)" != "Darwin" ]] ; then
+#if using macOS
+if [[ "$(uname)" == "Darwin" ]] ; then
+  #check for diskutil use
+  if [ -x $(which diskutil) ] ; then
+    bootfs_path="/Volumes/${bootfs_name}"
+    diskutil mount "$bootfs_name"
+  fi
+#if using linux
+elif [[ "$(uname)" == "Linux" ]] ; then
+  #check if sd card is mounted to /media/username/bootfs before going further
+  if [ -e "/media/${username}/${bootfs_name}" ] ; then
+    bootfs_path="/media/${username}/${bootfs_name}"
+  else
+    echo "[ERROR]: Make sure the sd card is mounted to /media/yourusername/bootfs and try again"
+    exit 1
+  fi
+
+else
   echo ""
   echo "############################################################"
   echo ""
-  echo " This script is for MacOS (Darwin) only."
-  echo " Please adapt it for you environment and send you feedback."
-  echo ""
-  echo "############################################################"
-  echo ""
-  exit 1
-fi
-
-bootfs_path="/Volumes/${bootfs_name}"
-
-# try to mount if unmounted (but not ejected)
-if [ -x $(which diskutil) ] ; then
-  diskutil mount "$bootfs_name"
-fi
-
-if [ ! -d "$bootfs_path" ] ; then
-  echo ""
-  echo "############################################################"
-  echo ""
-  echo " Please mount SD card and try again."
+  echo "you are running neither Linux or Darwin (Macos) any contribution welcome"
   echo ""
   echo "############################################################"
   echo ""
@@ -515,15 +514,27 @@ mkdir -p -- "$destination_path"
 # this overcomes the limitiations of the FAT32 boot volume
 tar cz "${tar_options[@]}" -C "${source_path}" '.' > "${destination_path}/file_system.tgz"
 
-# try to mount if unmounted (but not ejected)
-if [ -x $(type -P diskutil) ] ; then
-  diskutil umount "$bootfs_name" || :
+# try to mount if unmounted (but not ejected) (only macOS)
+if [[ "$(uname)" == "Darwin" ]] ; then
+  if [ -x $(type -P diskutil) ] ; then
+    diskutil umount "$bootfs_name" || :
+  fi
 fi
 
 dotpi_echo_info "Mirror of file-system is here: ${file_system_mirror}"
 
 (( dotpi_instance_number++ ))
 dotpi_configuration_write --file "$environment_tmp_file" --key dotpi_instance_number --value "$dotpi_instance_number"
+
+if [[ "$(uname)" == "Linux" ]] ; then
+  echo ""
+  echo "####################################################"
+  echo ""
+  echo "EJECT CARD BEFORE REMOVING"
+  echo ""
+  echo "####################################################"
+  echo ""
+fi
 
 echo ""
 echo "####################################################"
@@ -537,4 +548,3 @@ dotpi_echo_info "You can monitor the preparation of the system with the followin
 dotpi_echo_info "(You will have to wait until the network is ready.)"
 dotpi_echo_info ''
 dotpi_echo_info "ssh ${dotpi_user}@${dotpi_instance_hostname}.local 'tail -f /opt/dotpi/var/log/dotpi_prepare_system_*.log'"
-
